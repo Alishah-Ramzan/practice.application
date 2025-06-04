@@ -193,11 +193,11 @@
             // button4
             // 
             button4.BackColor = SystemColors.Info;
-            button4.Location = new Point(461, 816);
+            button4.Location = new Point(444, 815);
             button4.Name = "button4";
-            button4.Size = new Size(112, 34);
+            button4.Size = new Size(150, 35);
             button4.TabIndex = 15;
-            button4.Text = "button4";
+            button4.Text = "Search/Save";
             button4.UseVisualStyleBackColor = false;
             button4.Click += button4_Click;
             // 

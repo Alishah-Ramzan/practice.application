@@ -1,16 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Repo.Context;
 using Repo.Interfaces;
-using Repo.Models;
 using Repo.Repositories;
+using DTOs;
 using Serilog;
 
 class Program
@@ -41,16 +36,15 @@ class Program
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
             services.AddScoped<IProductRepository, ProductRepository>();
-            services.AddHttpClient<IPixabayService, PixabayService>();
             services.AddScoped<IDumpingService, DumpingService>();
 
             var serviceProvider = services.BuildServiceProvider();
 
             var repo = serviceProvider.GetRequiredService<IProductRepository>();
-            var pixabayService = serviceProvider.GetRequiredService<IPixabayService>();
-            var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
             var dumpingService = serviceProvider.GetRequiredService<IDumpingService>();
+            var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
 
             bool exit = false;
             while (!exit)
@@ -61,8 +55,9 @@ class Program
                 Console.WriteLine("3. Get Product by ID");
                 Console.WriteLine("4. Update Product");
                 Console.WriteLine("5. Delete Product");
-                Console.WriteLine("6. Exit");
-                Console.WriteLine("7. Search Pixabay Images");
+                Console.WriteLine("6. Exit (Auto-dump on timeout)");
+                Console.WriteLine("7. Recover Last Dumped Product");
+                Console.WriteLine("8. Exit Immediately");
                 Console.Write("Select an option (auto-dump in 10 sec): ");
 
                 string input = await ReadLineWithTimeoutAsync(TimeSpan.FromSeconds(10));
@@ -70,10 +65,8 @@ class Program
                 {
                     Console.WriteLine("\n⏱️ No input in 10 seconds. Dumping last records and exiting...");
 
-                    // Dump from Pixabay service
                     await dumpingService.DumpDataAsync();
 
-                    // Dump last product
                     var lastProduct = await dbContext.Products
                         .OrderByDescending(p => p.Id)
                         .FirstOrDefaultAsync();
@@ -114,7 +107,11 @@ class Program
                         Console.WriteLine("Exiting...");
                         break;
                     case "7":
-                        await SearchPixabayImagesAsync(pixabayService, dbContext);
+                        await dumpingService.RecoverLastDumpedProductAsync();
+                        break;
+                    case "8":
+                        exit = true;
+                        Console.WriteLine("Immediate exit.");
                         break;
                     default:
                         Console.WriteLine("Invalid option. Try again.");
@@ -136,8 +133,8 @@ class Program
     {
         var task = Task.Run(() => Console.ReadLine());
         if (await Task.WhenAny(task, Task.Delay(timeout)) == task)
-            return task.Result;
-        return null;
+            return task.Result ?? string.Empty;
+        return string.Empty;
     }
 
     private static async Task AddProductAsync(IProductRepository repo)
@@ -152,9 +149,9 @@ class Program
             return;
         }
 
-        var product = new Product { Name = name, Price = price };
-        await repo.AddProduct(product);
-        Console.WriteLine($"Product added with ID: {product.Id}");
+        var productDto = new ProductDto { Name = name, Price = price };
+        await repo.AddProduct(productDto);
+        Console.WriteLine("Product added.");
     }
 
     private static async Task ListAllProductsAsync(IProductRepository repo)
@@ -163,7 +160,7 @@ class Program
         Console.WriteLine("\nProduct List:");
         foreach (var p in products)
         {
-            Console.WriteLine($"ID: {p.Id}, Name: {p.Name}, Price: {p.Price:C}");
+            Console.WriteLine($"Name: {p.Name}, Price: {p.Price:C}");
         }
     }
 
@@ -180,7 +177,7 @@ class Program
         if (product == null)
             Console.WriteLine("Product not found.");
         else
-            Console.WriteLine($"ID: {product.Id}, Name: {product.Name}, Price: {product.Price:C}");
+            Console.WriteLine($"Name: {product.Name}, Price: {product.Price:C}");
     }
 
     private static async Task UpdateProductAsync(IProductRepository repo)
@@ -192,32 +189,18 @@ class Program
             return;
         }
 
-        var product = await repo.GetProductById(id);
-        if (product == null)
+        Console.Write("Enter new name: ");
+        string name = Console.ReadLine() ?? "";
+
+        Console.Write("Enter new price: ");
+        if (!decimal.TryParse(Console.ReadLine(), out decimal price))
         {
-            Console.WriteLine("Product not found.");
+            Console.WriteLine("Invalid price.");
             return;
         }
 
-        Console.Write($"Enter new name (leave blank to keep '{product.Name}'): ");
-        string name = Console.ReadLine() ?? "";
-        if (!string.IsNullOrWhiteSpace(name))
-            product.Name = name;
-
-        Console.Write($"Enter new price (leave blank to keep {product.Price:C}): ");
-        string priceInput = Console.ReadLine() ?? "";
-        if (!string.IsNullOrWhiteSpace(priceInput))
-        {
-            if (decimal.TryParse(priceInput, out decimal price))
-                product.Price = price;
-            else
-            {
-                Console.WriteLine("Invalid price input. Update canceled.");
-                return;
-            }
-        }
-
-        await repo.UpdateProduct(product);
+        var updatedDto = new ProductDto { Name = name, Price = price };
+        await repo.UpdateProduct(id, updatedDto);
         Console.WriteLine("Product updated.");
     }
 
@@ -230,45 +213,7 @@ class Program
             return;
         }
 
-        var product = await repo.GetProductById(id);
-        if (product == null)
-        {
-            Console.WriteLine("Product not found.");
-            return;
-        }
-
         await repo.DeleteProduct(id);
         Console.WriteLine("Product deleted.");
-    }
-
-    private static async Task SearchPixabayImagesAsync(IPixabayService pixabayService, ApplicationDbContext dbContext)
-    {
-        Console.Write("Enter search keyword for images: ");
-        string query = Console.ReadLine() ?? "";
-
-        var pixabayResponse = await pixabayService.SearchImagesAsync(query);
-
-        if (pixabayResponse?.Hits?.Length > 0)
-        {
-            var firstHit = pixabayResponse.Hits.First();
-
-            var image = new Image
-            {
-                Query = query,
-                Tag = firstHit.Tags,
-                Url = firstHit.WebformatURL
-            };
-
-            dbContext.Images.Add(image);
-            await dbContext.SaveChangesAsync();
-
-            Console.WriteLine("Image saved to database:");
-            Console.WriteLine($"Tags: {firstHit.Tags}");
-            Console.WriteLine($"Image URL: {firstHit.WebformatURL}");
-        }
-        else
-        {
-            Console.WriteLine("No images found.");
-        }
     }
 }

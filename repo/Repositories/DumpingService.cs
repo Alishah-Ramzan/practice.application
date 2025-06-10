@@ -3,7 +3,9 @@ using Repo.Context;
 using Repo.Interfaces;
 using Repo.Models;
 using System;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +41,10 @@ namespace Repo.Repositories
                     _context.Products.Add(clonedProduct);
                     await _context.SaveChangesAsync();
 
-                    _logger.LogInformation("Cloned and inserted last product (ID {OriginalId}) as new product (ID {NewId})",
+                    var productJson = JsonSerializer.Serialize(clonedProduct, new JsonSerializerOptions { WriteIndented = true });
+                    await File.WriteAllTextAsync("product-dump.json", productJson);
+
+                    _logger.LogInformation("Cloned and inserted last product (ID {OriginalId}) as new product (ID {NewId}) and dumped to file.",
                         lastProduct.Id, clonedProduct.Id);
                 }
                 else
@@ -52,5 +57,47 @@ namespace Repo.Repositories
                 _logger.LogError(ex, "Error while cloning and dumping product.");
             }
         }
+
+        public async Task RecoverLastDumpedProductAsync()
+        {
+            try
+            {
+                if (!File.Exists("product-dump.json"))
+                {
+                    _logger.LogWarning("No dump file found for recovery.");
+                    return;
+                }
+
+                var json = await File.ReadAllTextAsync("product-dump.json");
+                var product = JsonSerializer.Deserialize<Product>(json);
+
+                if (product != null)
+                {
+                    product.Id = 0; // Reset ID for EF Core
+
+                    // Remove " (Dumped at ...)" if present in the name
+                    var name = product.Name;
+                    var index = name.IndexOf(" (Dumped at");
+                    if (index != -1)
+                    {
+                        product.Name = name.Substring(0, index);
+                    }
+
+                    await _context.Products.AddAsync(product);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("Recovered dumped product and inserted it into the database.");
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to deserialize dumped product.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during product recovery.");
+            }
+        }
+
     }
 }

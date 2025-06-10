@@ -24,7 +24,7 @@ namespace Repo.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<PixabayResponse?> SearchImagesAsync(string query)
+        public async Task<PixabayResponse> SearchImagesAsync(string query)
         {
             string url = $"https://pixabay.com/api/?key={_apiKey}&q={Uri.EscapeDataString(query)}&image_type=photo&per_page=5";
 
@@ -53,7 +53,7 @@ namespace Repo.Repositories
                 await _dbContext.SaveChangesAsync();
             }
 
-            return pixabayResponse;
+            return pixabayResponse ?? new PixabayResponse { Hits = Array.Empty<PixabayHit>() };
         }
     }
 }

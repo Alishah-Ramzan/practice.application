@@ -1,26 +1,41 @@
 ﻿using Repo.Context;
-using Repo.Models;
 using Repo.Repositories;
+using Repo.Mappings;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using AutoMapper;
+using Repo.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using DTOs;
 
 namespace practice.winform
 {
     public partial class Form1 : Form
     {
         private readonly string _connectionString;
+        private readonly IMapper _mapper;
+        private readonly ApplicationDbContext _context;
+        private readonly ProductRepository _repo;
         private List<PixabayHit> _pixabayHits = new();
 
         public Form1()
         {
             InitializeComponent();
+
             _connectionString = LoadConnectionString();
+            _mapper = ConfigureMapper();
+
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseSqlServer(_connectionString)
+                .Options;
+
+            _context = new ApplicationDbContext(options);
+            _repo = new ProductRepository(_context, _mapper);
         }
 
         private string LoadConnectionString()
@@ -29,37 +44,38 @@ namespace practice.winform
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
+            var connectionString = config.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                throw new InvalidOperationException("Connection string 'DefaultConnection' is not found or is null.");
+            }
 
-            return config.GetConnectionString("DefaultConnection");
+            return connectionString;
         }
 
-        // Add Product
-        private async void button1_Click(object sender, EventArgs e)
+        private IMapper ConfigureMapper()
+        {
+            var config = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile<MappingProfile>();
+            });
+            return config.CreateMapper();
+        }
+
+        private async void button1_Click(object sender, EventArgs e)  // Add Product
         {
             string name = textBox1.Text.Trim();
-
             if (!decimal.TryParse(textBox2.Text.Trim(), out decimal price))
             {
                 MessageBox.Show("Please enter a valid price.");
                 return;
             }
 
-            var product = new Product
-            {
-                Name = name,
-                Price = price
-            };
-
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(_connectionString)
-                .Options;
-
-            using var context = new ApplicationDbContext(options);
-            var repo = new ProductRepository(context);
+            var productDto = new ProductDto { Name = name, Price = price };
 
             try
             {
-                await repo.AddProduct(product);
+                await _repo.AddProduct(productDto);
                 MessageBox.Show("Product added successfully!");
                 textBox1.Clear();
                 textBox2.Clear();
@@ -70,23 +86,13 @@ namespace practice.winform
             }
         }
 
-        // Load all products
-        private async void button1_Click_1(object sender, EventArgs e)
+        private async void button1_Click_1(object sender, EventArgs e)  // Load all products
         {
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(_connectionString)
-                .Options;
-
-            using var context = new ApplicationDbContext(options);
-            var repo = new ProductRepository(context);
-
             try
             {
-                var products = await repo.GetAllProducts();
+                var products = await _repo.GetAllProducts();
                 dataGridView1.DataSource = products;
 
-                if (dataGridView1.Columns["Id"] != null)
-                    dataGridView1.Columns["Id"].HeaderText = "Product ID";
                 if (dataGridView1.Columns["Name"] != null)
                     dataGridView1.Columns["Name"].HeaderText = "Product Name";
                 if (dataGridView1.Columns["Price"] != null)
@@ -98,8 +104,7 @@ namespace practice.winform
             }
         }
 
-        // Update product
-        private async void button2_Click(object sender, EventArgs e)
+        private async void button2_Click(object sender, EventArgs e)  // Update product
         {
             if (!int.TryParse(textBox3.Text.Trim(), out int productId))
             {
@@ -114,26 +119,18 @@ namespace practice.winform
                 return;
             }
 
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(_connectionString)
-                .Options;
-
-            using var context = new ApplicationDbContext(options);
-            var repo = new ProductRepository(context);
+            var productDto = new ProductDto { Name = name, Price = price };
 
             try
             {
-                var existingProduct = await repo.GetProductById(productId);
+                var existingProduct = await _repo.GetProductById(productId);
                 if (existingProduct == null)
                 {
                     MessageBox.Show("Product not found.");
                     return;
                 }
 
-                existingProduct.Name = name;
-                existingProduct.Price = price;
-
-                await repo.UpdateProduct(existingProduct);
+                await _repo.UpdateProduct(productId, productDto);
                 MessageBox.Show("Product updated successfully!");
                 textBox1.Clear();
                 textBox2.Clear();
@@ -145,8 +142,7 @@ namespace practice.winform
             }
         }
 
-        // Delete product
-        private async void button3_Click(object sender, EventArgs e)
+        private async void button3_Click(object sender, EventArgs e)  // Delete product
         {
             if (!int.TryParse(textBox3.Text.Trim(), out int productId))
             {
@@ -154,23 +150,9 @@ namespace practice.winform
                 return;
             }
 
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(_connectionString)
-                .Options;
-
-            using var context = new ApplicationDbContext(options);
-            var repo = new ProductRepository(context);
-
             try
             {
-                var product = await repo.GetProductById(productId);
-                if (product == null)
-                {
-                    MessageBox.Show("Product not found.");
-                    return;
-                }
-
-                await repo.DeleteProduct(productId);
+                await _repo.DeleteProduct(productId);
                 MessageBox.Show("Product deleted successfully!");
                 textBox3.Clear();
                 textBox1.Clear();
@@ -182,7 +164,7 @@ namespace practice.winform
             }
         }
 
-        // Search Pixabay Images button click
+        // The Pixabay image search functionality is left untouched except context usage
         private async void button4_Click(object sender, EventArgs e)
         {
             string query = textBox4.Text.Trim();
@@ -192,12 +174,7 @@ namespace practice.winform
                 return;
             }
 
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(_connectionString)
-                .Options;
-
-            using var context = new ApplicationDbContext(options);
-            var pixabayService = new PixabayService(new System.Net.Http.HttpClient(), context);
+            var pixabayService = new PixabayService(new System.Net.Http.HttpClient(), _context);
 
             try
             {
@@ -228,34 +205,22 @@ namespace practice.winform
             }
         }
 
-        // Filter the Pixabay images displayed in dataGridView2 by Tags as user types in textBox4
         private void textBox4_TextChanged(object sender, EventArgs e)
         {
             string filter = textBox4.Text.Trim().ToLower();
 
-            if (string.IsNullOrEmpty(filter))
-            {
-                dataGridView2.DataSource = _pixabayHits.Select(hit => new
-                {
-                    Tags = hit.Tags,
-                    ImageURL = hit.WebformatURL
-                }).ToList();
-            }
-            else
-            {
-                var filtered = _pixabayHits
-                    .Where(hit => hit.Tags.ToLower().Contains(filter))
-                    .Select(hit => new
-                    {
-                        Tags = hit.Tags,
-                        ImageURL = hit.WebformatURL
-                    }).ToList();
+            var filtered = string.IsNullOrEmpty(filter)
+                ? _pixabayHits
+                : _pixabayHits.Where(hit => hit.Tags.ToLower().Contains(filter));
 
-                dataGridView2.DataSource = filtered;
-            }
+            dataGridView2.DataSource = filtered.Select(hit => new
+            {
+                Tags = hit.Tags,
+                ImageURL = hit.WebformatURL
+            }).ToList();
         }
 
-        // Other unused event handlers you had (can keep empty)
+        // Other event handlers (empty)
         private void Form1_Load(object sender, EventArgs e) { }
         private void label1_Click(object sender, EventArgs e) { }
         private void label2_Click(object sender, EventArgs e) { }
@@ -267,5 +232,12 @@ namespace practice.winform
         private void textBox3_TextChanged(object sender, EventArgs e) { }
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e) { }
         private void dataGridView2_CellContentClick(object sender, DataGridViewCellEventArgs e) { }
+
+        private void button5_Click(object sender, EventArgs e)
+        {
+            Form2 form2 = new Form2();
+            form2.Show();
+            this.Hide(); 
+        }
     }
 }

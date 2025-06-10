@@ -1,12 +1,11 @@
-﻿using Repo.Models;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿// IProductRepository.cs
+using DTOs;
 
 public interface IProductRepository
 {
-    Task AddProduct(Product product);
-    Task<List<Product>> GetAllProducts();
-    Task<Product?> GetProductById(int id);
-    Task UpdateProduct(Product product);
+    Task AddProduct(ProductDto productDto);
+    Task<List<ProductDto>> GetAllProducts();
+    Task<ProductDto> GetProductById(int id);
+    Task UpdateProduct(int id, ProductDto productDto);
     Task DeleteProduct(int id);
 }

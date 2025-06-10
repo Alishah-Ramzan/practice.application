@@ -1,4 +1,6 @@
-﻿using Repo.Context;
+﻿using AutoMapper;
+using DTOs;
+using Repo.Context;
 using Repo.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
@@ -7,42 +9,54 @@ using System.Threading.Tasks;
 public class ProductRepository : IProductRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly IMapper _mapper;
 
-    public ProductRepository(ApplicationDbContext context)
+    public ProductRepository(ApplicationDbContext context, IMapper mapper)
     {
         _context = context;
+        _mapper = mapper;
     }
 
-    public async Task AddProduct(Product product)
+    public async Task AddProduct(ProductDto productDto)
     {
+        var product = _mapper.Map<Product>(productDto);
         _context.Products.Add(product);
         await _context.SaveChangesAsync();
     }
 
-    public async Task<List<Product>> GetAllProducts()
+    public async Task<List<ProductDto>> GetAllProducts()
     {
-        return await _context.Products.ToListAsync();
+        var products = await _context.Products.ToListAsync();
+        return _mapper.Map<List<ProductDto>>(products);
     }
 
-    public async Task<Product?> GetProductById(int id)
+    public async Task<ProductDto> GetProductById(int id)
     {
-        return await _context.Products.FindAsync(id);
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+            throw new KeyNotFoundException("Product not found");
+
+        return _mapper.Map<ProductDto>(product);
     }
 
-    public async Task UpdateProduct(Product product)
+    public async Task UpdateProduct(int id, ProductDto productDto)
     {
-        _context.Products.Update(product);
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+            throw new KeyNotFoundException("Product not found");
+
+        // Optional: map changes directly from DTO to entity
+        _mapper.Map(productDto, product);
         await _context.SaveChangesAsync();
     }
 
     public async Task DeleteProduct(int id)
     {
         var product = await _context.Products.FindAsync(id);
-        if (product != null)
-        {
-            _context.Products.Remove(product);
-            await _context.SaveChangesAsync();
-        }
+        if (product == null)
+            throw new KeyNotFoundException("Product not found");
+
+        _context.Products.Remove(product);
+        await _context.SaveChangesAsync();
     }
 }
-

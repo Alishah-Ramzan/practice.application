@@ -13,12 +13,18 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                _context?.Dispose();
+
+                if (components != null)
+                {
+                    components.Dispose();
+                }
             }
             base.Dispose(disposing);
         }
+
 
         #region Windows Form Designer generated code
 
@@ -44,6 +50,7 @@
             dataGridView2 = new DataGridView();
             button4 = new Button();
             textBox4 = new TextBox();
+            button5 = new Button();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
             SuspendLayout();
@@ -209,12 +216,23 @@
             textBox4.TabIndex = 16;
             textBox4.TextChanged += textBox4_TextChanged;
             // 
+            // button5
+            // 
+            button5.Location = new Point(790, 802);
+            button5.Name = "button5";
+            button5.Size = new Size(112, 34);
+            button5.TabIndex = 17;
+            button5.Text = "form2";
+            button5.UseVisualStyleBackColor = true;
+            button5.Click += button5_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.SkyBlue;
             ClientSize = new Size(1123, 937);
+            Controls.Add(button5);
             Controls.Add(textBox4);
             Controls.Add(button4);
             Controls.Add(dataGridView2);
@@ -258,5 +276,6 @@
         private DataGridView dataGridView2;
         private Button button4;
         private TextBox textBox4;
+        private Button button5;
     }
 }

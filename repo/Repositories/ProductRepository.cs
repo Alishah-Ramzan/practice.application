@@ -1,10 +1,10 @@
 ﻿using AutoMapper;
-using DTOs;
 using Repo.Context;
 using Repo.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DTOs;
 
 public class ProductRepository : IProductRepository
 {

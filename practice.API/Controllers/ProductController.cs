@@ -1,4 +1,5 @@
 ﻿using DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Repo.Interfaces;
 
@@ -6,6 +7,7 @@ namespace practice.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] //attributes
     public class ProductController : ControllerBase
     {
         private readonly IProductRepository _productRepository;
@@ -14,8 +16,8 @@ namespace practice.API.Controllers
         {
             _productRepository = productRepository;
         }
-
-        [HttpGet]
+        //http verbs hai yeah
+        [HttpGet("get-all-products")]
         public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
         {
             var products = await _productRepository.GetAllProducts();
@@ -36,7 +38,7 @@ namespace practice.API.Controllers
         public async Task<ActionResult> Create(ProductDto productDto)
         {
             await _productRepository.AddProduct(productDto);
-            return CreatedAtAction(nameof(GetById), new { id = 0 }, productDto); // Replace '0' with the actual ID if available
+            return CreatedAtAction(nameof(GetById), new { id = 0 }, productDto); // Replace '0' with actual ID
         }
 
 

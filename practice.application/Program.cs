@@ -37,19 +37,22 @@ class Program
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
             services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IDumpingService, DumpingService>();
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var repo = serviceProvider.GetRequiredService<IProductRepository>();
+            var productRepo = serviceProvider.GetRequiredService<IProductRepository>();
+            var userRepo = serviceProvider.GetRequiredService<IUserRepository>();
             var dumpingService = serviceProvider.GetRequiredService<IDumpingService>();
             var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
 
             bool exit = false;
             while (!exit)
             {
-                Console.WriteLine("\n--- Product Management ---");
+                Console.WriteLine("\n--- Management Console ---");
                 Console.WriteLine("1. Add Product");
                 Console.WriteLine("2. List All Products");
                 Console.WriteLine("3. Get Product by ID");
@@ -58,6 +61,8 @@ class Program
                 Console.WriteLine("6. Exit (Auto-dump on timeout)");
                 Console.WriteLine("7. Recover Last Dumped Product");
                 Console.WriteLine("8. Exit Immediately");
+                Console.WriteLine("9. Add User");
+                Console.WriteLine("10. List All Users");
                 Console.Write("Select an option (auto-dump in 10 sec): ");
 
                 string input = await ReadLineWithTimeoutAsync(TimeSpan.FromSeconds(10));
@@ -88,19 +93,19 @@ class Program
                 switch (input)
                 {
                     case "1":
-                        await AddProductAsync(repo);
+                        await AddProductAsync(productRepo);
                         break;
                     case "2":
-                        await ListAllProductsAsync(repo);
+                        await ListAllProductsAsync(productRepo);
                         break;
                     case "3":
-                        await GetProductByIdAsync(repo);
+                        await GetProductByIdAsync(productRepo);
                         break;
                     case "4":
-                        await UpdateProductAsync(repo);
+                        await UpdateProductAsync(productRepo);
                         break;
                     case "5":
-                        await DeleteProductAsync(repo);
+                        await DeleteProductAsync(productRepo);
                         break;
                     case "6":
                         exit = true;
@@ -112,6 +117,12 @@ class Program
                     case "8":
                         exit = true;
                         Console.WriteLine("Immediate exit.");
+                        break;
+                    case "9":
+                        await AddUserAsync(userRepo);
+                        break;
+                    case "10":
+                        await ListAllUsersAsync(userRepo);
                         break;
                     default:
                         Console.WriteLine("Invalid option. Try again.");
@@ -149,15 +160,15 @@ class Program
             return;
         }
 
-        var productDto = new ProductDto { Name = name, Price = price };
-        await repo.AddProduct(productDto);
-        Console.WriteLine("Product added.");
+        var dto = new ProductDto { Name = name, Price = price };
+        await repo.AddProduct(dto);
+        Console.WriteLine("✅ Product added.");
     }
 
     private static async Task ListAllProductsAsync(IProductRepository repo)
     {
         var products = await repo.GetAllProducts();
-        Console.WriteLine("\nProduct List:");
+        Console.WriteLine("\n📦 Product List:");
         foreach (var p in products)
         {
             Console.WriteLine($"Name: {p.Name}, Price: {p.Price:C}");
@@ -175,7 +186,7 @@ class Program
 
         var product = await repo.GetProductById(id);
         if (product == null)
-            Console.WriteLine("Product not found.");
+            Console.WriteLine("❌ Product not found.");
         else
             Console.WriteLine($"Name: {product.Name}, Price: {product.Price:C}");
     }
@@ -201,7 +212,7 @@ class Program
 
         var updatedDto = new ProductDto { Name = name, Price = price };
         await repo.UpdateProduct(id, updatedDto);
-        Console.WriteLine("Product updated.");
+        Console.WriteLine("✅ Product updated.");
     }
 
     private static async Task DeleteProductAsync(IProductRepository repo)
@@ -214,6 +225,29 @@ class Program
         }
 
         await repo.DeleteProduct(id);
-        Console.WriteLine("Product deleted.");
+        Console.WriteLine("🗑️ Product deleted.");
+    }
+
+    private static async Task AddUserAsync(IUserRepository userRepo)
+    {
+        Console.Write("Enter username: ");
+        string username = Console.ReadLine() ?? "";
+
+        Console.Write("Enter password: ");
+        string password = Console.ReadLine() ?? "";
+
+        var user = new Repo.Models.User { Username = username, Password = password };
+        await userRepo.AddUserAsync(user);
+        Console.WriteLine("✅ User added.");
+    }
+
+    private static async Task ListAllUsersAsync(IUserRepository userRepo)
+    {
+        var users = await userRepo.GetAllUsersAsync();
+        Console.WriteLine("\n👤 User List:");
+        foreach (var user in users)
+        {
+            Console.WriteLine($"ID: {user.Id}, Username: {user.Username}");
+        }
     }
 }
